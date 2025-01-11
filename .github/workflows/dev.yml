@@ -1,0 +1,51 @@
+name: CICD
+on: 
+  workflow_call:
+    inputs:
+        environment:
+            type: string
+            required: true
+            description: 'Nome ambiente'
+jobs:
+    build-and-deploy:
+      runs-on: [ ubuntu-latest ]
+      environment: ${{ inputs.environment }}    
+      steps:
+        - name: Checkout source
+          uses: actions/checkout@v4.1.5
+        - name: Configure AWS credentials
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: us-east-1      
+        - name: Login to Amazon ECR
+          id: login-ecr
+          run: |
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 216989136189.dkr.ecr.us-east-1.amazonaws.com
+            
+        - name: Build and Push Docker Image to ECR
+          uses: docker/build-push-action@v6
+          with:
+            context: ./src
+            file: ./src/Dockerfile
+            push: true
+            tags: |
+              ${{ vars.ECR }}:v${{ github.run_number }}
+              ${{ vars.ECR }}:latest  
+
+        - name: Obtendo o código
+          uses: actions/checkout@v3
+        - name: Set up SSH
+          uses: webfactory/ssh-agent@v0.7.0
+          with:
+            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        - name: GitOps - Patch and push
+          run: |
+            git config --global user.name "wallafi01"
+            git config --global user.email "wallafinobrega98@outlook.com"
+            git remote set-url origin git@github.com:wallafi01/gitops-eks-argocd.git
+            sed -i 's|image: 216989136189.dkr.ecr.us-east-1.amazonaws.com/dev/web-live-app:v[0-9]\{1,3\}|image: 216989136189.dkr.ecr.us-east-1.amazonaws.com/dev/web-live-app:v${{ github.run_number }}|g' ./ops/deploy/deployment.yml
+            git add ./ops/deploy/dev
+            git commit -m "Alteração para a imagem 216989136189.dkr.ecr.us-east-1.amazonaws.com/dev/web-live-app:v${{ github.run_number }}" || echo "Nada para commitar"
+            git push origin

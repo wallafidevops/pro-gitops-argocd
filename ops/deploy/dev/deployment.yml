@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: web
+        image: 216989136189.dkr.ecr.us-east-1.amazonaws.com/dev/web-live-app:v3
+        ports:
+        - containerPort: 5000
+--- 
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: dev
+spec:
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 5000
+  type: LoadBalancer
